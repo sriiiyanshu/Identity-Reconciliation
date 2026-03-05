@@ -4,6 +4,12 @@ This is an assignment given by BiteSpeed as a part of their assessment for the E
 
 The assignement was made with the help of Github Copilot.
 
+The project can be accessed at:
+
+BACKEND: https://identity-reconciliation-fd9u.onrender.com
+
+FRONTEND: https://identity-reconciliation-client.vercel.app
+
 To run this project locally:
 
 1. Install the libraries

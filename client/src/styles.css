@@ -66,6 +66,32 @@ h1 {
   color: #374151;
 }
 
+.infoBox {
+  margin-bottom: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f9fafb;
+}
+
+.infoTitle {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.infoLink {
+  display: inline-block;
+  font-size: 13px;
+  color: #2563eb;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.infoLink:hover {
+  text-decoration: underline;
+}
+
 .form {
   display: grid;
   gap: 12px;

@@ -80,6 +80,13 @@ function App() {
           <p className="statusText">{isConnected ? "Render backend connected" : "Render backend is waking up from sleep..."}</p>
         </div>
 
+        <div className="infoBox">
+          <p className="infoTitle">Backend URL</p>
+          <a className="infoLink" href={API_BASE_URL} target="_blank" rel="noreferrer">
+            {API_BASE_URL}
+          </a>
+        </div>
+
         <form onSubmit={handleSubmit} className="form">
           <label>
             Email
