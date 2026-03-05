@@ -1,73 +1,73 @@
-import prisma from '../lib/prisma.js'
+import prisma from "../lib/prisma.js";
 
 const getQueryContacts = async (email, phoneNumber) => {
-  const conditions = []
+  const conditions = [];
 
   if (email) {
-    conditions.push({ email })
+    conditions.push({ email });
   }
 
   if (phoneNumber) {
-    conditions.push({ phoneNumber })
+    conditions.push({ phoneNumber });
   }
 
   if (!conditions.length) {
-    return []
+    return [];
   }
 
   return prisma.contact.findMany({
     where: {
       OR: conditions,
-      deletedAt: null
+      deletedAt: null,
     },
-    orderBy: { createdAt: 'asc' }
-  })
-}
+    orderBy: { createdAt: "asc" },
+  });
+};
 
 const getClusterContacts = async (seedContacts) => {
-  const queue = [...seedContacts]
-  const seen = new Set(seedContacts.map((item) => item.id))
-  const emails = new Set(seedContacts.map((item) => item.email).filter(Boolean))
-  const phoneNumbers = new Set(seedContacts.map((item) => item.phoneNumber).filter(Boolean))
+  const queue = [...seedContacts];
+  const seen = new Set(seedContacts.map((item) => item.id));
+  const emails = new Set(seedContacts.map((item) => item.email).filter(Boolean));
+  const phoneNumbers = new Set(seedContacts.map((item) => item.phoneNumber).filter(Boolean));
 
   while (queue.length) {
-    const current = queue.shift()
-    const linkedTargets = []
+    const current = queue.shift();
+    const linkedTargets = [];
 
     if (current.linkedId) {
-      linkedTargets.push({ id: current.linkedId })
+      linkedTargets.push({ id: current.linkedId });
     }
 
-    linkedTargets.push({ linkedId: current.id })
+    linkedTargets.push({ linkedId: current.id });
 
     if (current.email) {
-      linkedTargets.push({ email: current.email })
+      linkedTargets.push({ email: current.email });
     }
 
     if (current.phoneNumber) {
-      linkedTargets.push({ phoneNumber: current.phoneNumber })
+      linkedTargets.push({ phoneNumber: current.phoneNumber });
     }
 
     const related = await prisma.contact.findMany({
       where: {
         deletedAt: null,
-        OR: linkedTargets
+        OR: linkedTargets,
       },
-      orderBy: { createdAt: 'asc' }
-    })
+      orderBy: { createdAt: "asc" },
+    });
 
     for (const contact of related) {
       if (!seen.has(contact.id)) {
-        seen.add(contact.id)
-        queue.push(contact)
+        seen.add(contact.id);
+        queue.push(contact);
       }
 
       if (contact.email) {
-        emails.add(contact.email)
+        emails.add(contact.email);
       }
 
       if (contact.phoneNumber) {
-        phoneNumbers.add(contact.phoneNumber)
+        phoneNumbers.add(contact.phoneNumber);
       }
     }
 
@@ -75,18 +75,15 @@ const getClusterContacts = async (seedContacts) => {
       const extra = await prisma.contact.findMany({
         where: {
           deletedAt: null,
-          OR: [
-            emails.size ? { email: { in: [...emails] } } : undefined,
-            phoneNumbers.size ? { phoneNumber: { in: [...phoneNumbers] } } : undefined
-          ].filter(Boolean)
+          OR: [emails.size ? { email: { in: [...emails] } } : undefined, phoneNumbers.size ? { phoneNumber: { in: [...phoneNumbers] } } : undefined].filter(Boolean),
         },
-        orderBy: { createdAt: 'asc' }
-      })
+        orderBy: { createdAt: "asc" },
+      });
 
       for (const contact of extra) {
         if (!seen.has(contact.id)) {
-          seen.add(contact.id)
-          queue.push(contact)
+          seen.add(contact.id);
+          queue.push(contact);
         }
       }
     }
@@ -95,61 +92,59 @@ const getClusterContacts = async (seedContacts) => {
   return prisma.contact.findMany({
     where: {
       id: { in: [...seen] },
-      deletedAt: null
+      deletedAt: null,
     },
-    orderBy: { createdAt: 'asc' }
-  })
-}
+    orderBy: { createdAt: "asc" },
+  });
+};
 
 const getPrimaryContact = (contacts) => {
   const sorted = [...contacts].sort((a, b) => {
-    const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     if (diff !== 0) {
-      return diff
+      return diff;
     }
-    return a.id - b.id
-  })
+    return a.id - b.id;
+  });
 
-  const primaryInSorted = sorted.find((item) => item.linkPrecedence === 'primary')
-  return primaryInSorted || sorted[0]
-}
+  const primaryInSorted = sorted.find((item) => item.linkPrecedence === "primary");
+  return primaryInSorted || sorted[0];
+};
 
 const normalizeLinks = async (contacts, primaryId) => {
   const updates = contacts
     .filter((item) => item.id !== primaryId)
     .map((item) => {
-      const shouldBeSecondary = item.linkPrecedence !== 'secondary' || item.linkedId !== primaryId
+      const shouldBeSecondary = item.linkPrecedence !== "secondary" || item.linkedId !== primaryId;
 
       if (!shouldBeSecondary) {
-        return null
+        return null;
       }
 
       return prisma.contact.update({
         where: { id: item.id },
         data: {
-          linkPrecedence: 'secondary',
-          linkedId: primaryId
-        }
-      })
+          linkPrecedence: "secondary",
+          linkedId: primaryId,
+        },
+      });
     })
-    .filter(Boolean)
+    .filter(Boolean);
 
   if (updates.length) {
-    await prisma.$transaction(updates)
+    await prisma.$transaction(updates);
   }
-}
+};
 
 const createSecondaryIfNeeded = async ({ email, phoneNumber, clusterContacts, primaryId }) => {
-  const hasExactMatch = clusterContacts.some(
-    (item) => (item.email || null) === (email || null) && (item.phoneNumber || null) === (phoneNumber || null)
-  )
+  const hasExactMatch = clusterContacts.some((item) => (item.email || null) === (email || null) && (item.phoneNumber || null) === (phoneNumber || null));
 
   if (hasExactMatch) {
-    return
+    return;
   }
 
-  const hasNewEmail = email && !clusterContacts.some((item) => item.email === email)
-  const hasNewPhone = phoneNumber && !clusterContacts.some((item) => item.phoneNumber === phoneNumber)
+  const hasNewEmail = email && !clusterContacts.some((item) => item.email === email);
+  const hasNewPhone = phoneNumber && !clusterContacts.some((item) => item.phoneNumber === phoneNumber);
 
   if (hasNewEmail || hasNewPhone) {
     await prisma.contact.create({
@@ -157,28 +152,26 @@ const createSecondaryIfNeeded = async ({ email, phoneNumber, clusterContacts, pr
         email: email || null,
         phoneNumber: phoneNumber || null,
         linkedId: primaryId,
-        linkPrecedence: 'secondary'
-      }
-    })
+        linkPrecedence: "secondary",
+      },
+    });
   }
-}
+};
 
 const mapResponse = (contacts, primaryId) => {
-  const primary = contacts.find((item) => item.id === primaryId)
-  const uniqueEmails = [...new Set(contacts.map((item) => item.email).filter(Boolean))]
-  const uniquePhones = [...new Set(contacts.map((item) => item.phoneNumber).filter(Boolean))]
-  const secondaryContactIds = contacts
-    .filter((item) => item.id !== primaryId)
-    .map((item) => item.id)
+  const primary = contacts.find((item) => item.id === primaryId);
+  const uniqueEmails = [...new Set(contacts.map((item) => item.email).filter(Boolean))];
+  const uniquePhones = [...new Set(contacts.map((item) => item.phoneNumber).filter(Boolean))];
+  const secondaryContactIds = contacts.filter((item) => item.id !== primaryId).map((item) => item.id);
 
   if (primary?.email) {
-    const rest = uniqueEmails.filter((item) => item !== primary.email)
-    uniqueEmails.splice(0, uniqueEmails.length, primary.email, ...rest)
+    const rest = uniqueEmails.filter((item) => item !== primary.email);
+    uniqueEmails.splice(0, uniqueEmails.length, primary.email, ...rest);
   }
 
   if (primary?.phoneNumber) {
-    const rest = uniquePhones.filter((item) => item !== primary.phoneNumber)
-    uniquePhones.splice(0, uniquePhones.length, primary.phoneNumber, ...rest)
+    const rest = uniquePhones.filter((item) => item !== primary.phoneNumber);
+    uniquePhones.splice(0, uniquePhones.length, primary.phoneNumber, ...rest);
   }
 
   return {
@@ -186,46 +179,46 @@ const mapResponse = (contacts, primaryId) => {
       primaryContatctId: primaryId,
       emails: uniqueEmails,
       phoneNumbers: uniquePhones,
-      secondaryContactIds
-    }
-  }
-}
+      secondaryContactIds,
+    },
+  };
+};
 
 export const identifyContact = async ({ email, phoneNumber }) => {
-  const seedContacts = await getQueryContacts(email, phoneNumber)
+  const seedContacts = await getQueryContacts(email, phoneNumber);
 
   if (!seedContacts.length) {
     const created = await prisma.contact.create({
       data: {
         email: email || null,
         phoneNumber: phoneNumber || null,
-        linkPrecedence: 'primary'
-      }
-    })
+        linkPrecedence: "primary",
+      },
+    });
 
     return {
       contact: {
         primaryContatctId: created.id,
         emails: created.email ? [created.email] : [],
         phoneNumbers: created.phoneNumber ? [created.phoneNumber] : [],
-        secondaryContactIds: []
-      }
-    }
+        secondaryContactIds: [],
+      },
+    };
   }
 
-  const clusterContacts = await getClusterContacts(seedContacts)
-  const primary = getPrimaryContact(clusterContacts)
+  const clusterContacts = await getClusterContacts(seedContacts);
+  const primary = getPrimaryContact(clusterContacts);
 
-  await normalizeLinks(clusterContacts, primary.id)
+  await normalizeLinks(clusterContacts, primary.id);
   await createSecondaryIfNeeded({
     email,
     phoneNumber,
     clusterContacts,
-    primaryId: primary.id
-  })
+    primaryId: primary.id,
+  });
 
-  const refreshed = await getClusterContacts([{ ...primary, linkedId: null }])
-  const primaryAfterRefresh = getPrimaryContact(refreshed)
+  const refreshed = await getClusterContacts([{ ...primary, linkedId: null }]);
+  const primaryAfterRefresh = getPrimaryContact(refreshed);
 
-  return mapResponse(refreshed, primaryAfterRefresh.id)
-}
+  return mapResponse(refreshed, primaryAfterRefresh.id);
+};
